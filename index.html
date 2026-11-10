@@ -2,7 +2,7 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <!-- iPad 橫屏防手勢與滿版視角設定 -->
+    <!-- iPad 橫屏防手勢與滿版自適應設定 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>數學黃金礦工：不等式挑戰</title>
     <style>
@@ -28,7 +28,7 @@
             touch-action: none;
         }
 
-        /* iPad 橫屏自適應核心容器 */
+        /* iPad 橫屏滿版核心容器 */
         #game-container {
             position: relative;
             width: 96vw;
@@ -71,7 +71,7 @@
             pointer-events: auto;
         }
 
-        /* 寶箱與商店彈窗專用層級 */
+        /* 寶箱與商店彈窗層級 */
         #chest-overlay, #shop-overlay {
             z-index: 20;
         }
@@ -167,35 +167,11 @@
             -webkit-user-select: auto;
             user-select: auto;
         }
-
-        /* 遊戲內 HUD 按鈕組 */
-        #game-hud-buttons {
-            position: absolute;
-            top: 50px;
-            right: 15px;
-            display: flex;
-            gap: 10px;
-            z-index: 5;
-        }
-
-        .hud-btn {
-            padding: 8px 18px;
-            font-size: 15px;
-            border-radius: 20px;
-            border: 2px solid #fff;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-        }
     </style>
 </head>
 <body>
 
     <div id="game-container">
-        <!-- 遊戲內 HUD 功能按鈕 (提示 & 炸藥) -->
-        <div id="game-hud-buttons">
-            <button id="hud-hint-btn" class="hud-btn" onclick="buyHint()" style="background: linear-gradient(135deg, #3498db, #2980b9);">💡 買提示 ($150)</button>
-            <button id="hud-tnt-btn" class="hud-btn" onclick="useDynamite()" style="background: linear-gradient(135deg, #e74c3c, #c0392b);">💣 炸藥 (0)</button>
-        </div>
-
         <canvas id="gameCanvas" width="900" height="650"></canvas>
         
         <!-- 啟動畫面 -->
@@ -280,6 +256,10 @@
         const ORIGIN_Y = UI_HEIGHT - 20;
         const BASE_ROPE_LENGTH = 50;
 
+        // HUD 按鈕點擊熱區 (畫面上精準比例)
+        const hintBtnBounds = { x: 605, y: 50, w: 140, h: 36, r: 18 };
+        const tntBtnBounds  = { x: 755, y: 50, w: 125, h: 36, r: 18 };
+
         // Game State
         let score = 0;
         let targetScore = 1000;
@@ -288,6 +268,7 @@
         let difficultyTier = 1; 
         let isGameOver = false;
         let lastTime = 0;
+        let lastInputTime = 0;
         let entities = [];
         let floatingTexts = [];
         let particles = []; 
@@ -916,26 +897,6 @@
             }
         }
 
-        function updateHUD() {
-            const tntBtn = document.getElementById('hud-tnt-btn');
-            const hintBtn = document.getElementById('hud-hint-btn');
-            
-            if (tntBtn) tntBtn.innerText = `💣 炸藥 (${dynamiteCount})`;
-            if (hintBtn) {
-                let maxHints = currentProblem ? currentProblem.hints.length : 3;
-                if (hintLevel < maxHints) {
-                    let cost = HINT_COSTS[hintLevel];
-                    hintBtn.innerText = `💡 買提示 ($${cost})`;
-                    hintBtn.style.opacity = '1';
-                    hintBtn.disabled = false;
-                } else {
-                    hintBtn.innerText = `💡 提示已達上限`;
-                    hintBtn.style.opacity = '0.6';
-                    hintBtn.disabled = true;
-                }
-            }
-        }
-
         function buyHint() {
             if (isGameOver || isChestActive) return;
             let maxHints = currentProblem ? currentProblem.hints.length : 3;
@@ -949,7 +910,6 @@
                 hintLevel++;
                 audio.playCollectCorrect();
                 floatingTexts.push(new FloatingText(`解鎖第 ${hintLevel} 步提示！`, ORIGIN_X, ORIGIN_Y - 20, "#FFFF00"));
-                updateHUD();
             } else {
                 audio.playCollectWrong();
                 floatingTexts.push(new FloatingText(`資金不足 $${cost}！`, ORIGIN_X, ORIGIN_Y - 20, "#FF3333"));
@@ -974,7 +934,6 @@
                     hook.grabbedEntity = null;
                     hook.state = 'pulling'; 
                     audio.stopPull();
-                    updateHUD();
                 } else {
                     audio.playCollectWrong();
                     floatingTexts.push(new FloatingText("無炸藥！", ORIGIN_X, ORIGIN_Y - 20, "#FF3333"));
@@ -1049,7 +1008,6 @@
             floatingTexts = [];
             particles = []; 
             
-            updateHUD();
             initLevel();
             audio.startBGM();
 
@@ -1071,11 +1029,55 @@
             }
         }
 
-        function handleTouchShoot(e) {
-            if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
-                if (e.cancelable) e.preventDefault();
-                shootHook();
+        // 計算點擊/觸控相對於 900x650 畫布的精準座標
+        function getCanvasPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+            
+            if (e.changedTouches && e.changedTouches.length > 0) {
+                clientX = e.changedTouches[0].clientX;
+                clientY = e.changedTouches[0].clientY;
+            } else if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
             }
+            
+            return {
+                x: (clientX - rect.left) * (GAME_WIDTH / rect.width),
+                y: (clientY - rect.top) * (GAME_HEIGHT / rect.height)
+            };
+        }
+
+        function handlePointerStart(e) {
+            const now = performance.now();
+            if (now - lastInputTime < 120) return; // 防 Touch/Mouse 重複觸發
+            lastInputTime = now;
+
+            if (e.type === 'touchstart' && e.cancelable) {
+                e.preventDefault();
+            }
+
+            if (isGameOver || isChestActive) return;
+
+            const pos = getCanvasPos(e);
+
+            // 檢查是否點擊 "買提示" 按鈕
+            if (pos.x >= hintBtnBounds.x && pos.x <= hintBtnBounds.x + hintBtnBounds.w &&
+                pos.y >= hintBtnBounds.y && pos.y <= hintBtnBounds.y + hintBtnBounds.h) {
+                buyHint();
+                return;
+            }
+
+            // 檢查是否點擊 "炸藥" 按鈕
+            if (pos.x >= tntBtnBounds.x && pos.x <= tntBtnBounds.x + tntBtnBounds.w &&
+                pos.y >= tntBtnBounds.y && pos.y <= tntBtnBounds.y + tntBtnBounds.h) {
+                useDynamite();
+                return;
+            }
+
+            // 否則出爪
+            shootHook();
         }
 
         window.addEventListener('keydown', (e) => {
@@ -1087,8 +1089,8 @@
             if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyD') useDynamite();
         });
 
-        canvas.addEventListener('mousedown', shootHook);
-        canvas.addEventListener('touchstart', handleTouchShoot, { passive: false });
+        canvas.addEventListener('mousedown', handlePointerStart);
+        canvas.addEventListener('touchstart', handlePointerStart, { passive: false });
 
         function openChestModal() {
             isChestActive = true;
@@ -1472,7 +1474,7 @@
             ctx.restore();
         }
 
-        /* 輔助畫圓角矩形函數，避免路徑錯位 */
+        /* 畫圓角矩形輔助函數 */
         function drawRoundedRectPath(ctx, x, y, w, h, r) {
             ctx.beginPath();
             ctx.moveTo(x + r, y);
@@ -1487,11 +1489,63 @@
             ctx.closePath();
         }
 
+        /* 繪製 Canvas 向量 HUD 按鈕 (買提示、炸藥) */
+        function drawCanvasHUDButtons() {
+            let maxHints = currentProblem ? currentProblem.hints.length : 3;
+            let hintDisabled = hintLevel >= maxHints;
+            let hintCost = HINT_COSTS[hintLevel] || 150;
+            let hintText = hintDisabled ? "💡 提示上限" : `💡 買提示 ($${hintCost})`;
+
+            // 1. 買提示按鈕
+            ctx.save();
+            ctx.globalAlpha = hintDisabled ? 0.6 : 1.0;
+            let gradHint = ctx.createLinearGradient(hintBtnBounds.x, hintBtnBounds.y, hintBtnBounds.x, hintBtnBounds.y + hintBtnBounds.h);
+            gradHint.addColorStop(0, '#3498db');
+            gradHint.addColorStop(1, '#2980b9');
+            
+            ctx.fillStyle = gradHint;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2.5;
+
+            drawRoundedRectPath(ctx, hintBtnBounds.x, hintBtnBounds.y, hintBtnBounds.w, hintBtnBounds.h, hintBtnBounds.r);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 15px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(hintText, hintBtnBounds.x + hintBtnBounds.w / 2, hintBtnBounds.y + hintBtnBounds.h / 2);
+            ctx.restore();
+
+            // 2. 炸藥按鈕
+            ctx.save();
+            let gradTnt = ctx.createLinearGradient(tntBtnBounds.x, tntBtnBounds.y, tntBtnBounds.x, tntBtnBounds.y + tntBtnBounds.h);
+            gradTnt.addColorStop(0, '#e74c3c');
+            gradTnt.addColorStop(1, '#c0392b');
+            
+            ctx.fillStyle = gradTnt;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2.5;
+
+            drawRoundedRectPath(ctx, tntBtnBounds.x, tntBtnBounds.y, tntBtnBounds.w, tntBtnBounds.h, tntBtnBounds.r);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 15px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`💣 炸藥 (${dynamiteCount})`, tntBtnBounds.x + tntBtnBounds.w / 2, tntBtnBounds.y + tntBtnBounds.h / 2);
+            ctx.restore();
+        }
+
         function drawUI() {
+            // 頂部頂欄
             ctx.fillStyle = '#34495e';
             ctx.fillRect(0, 0, GAME_WIDTH, 45);
             
-            ctx.font = 'bold 20px "Segoe UI"';
+            ctx.font = 'bold 20px "Segoe UI", sans-serif';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
             ctx.fillStyle = score >= targetScore ? '#2ecc71' : '#f1c40f';
@@ -1501,19 +1555,20 @@
             ctx.fillStyle = '#ecf0f1';
             ctx.fillText(`關卡: ${currentLevel} (Tier ${difficultyTier})`, GAME_WIDTH - 20, 22); 
             ctx.fillStyle = timeLeft > 10 ? '#2ecc71' : '#e74c3c';
-            ctx.fillText(`時間: ${Math.ceil(timeLeft)}`, GAME_WIDTH - 180, 22);
+            ctx.fillText(`時間: ${Math.ceil(timeLeft)}`, GAME_WIDTH - 220, 22);
 
+            // 中央題目告示牌
             if (currentProblem) {
                 let boxHeight = hintLevel > 0 ? 85 : 80;
                 let boxX = GAME_WIDTH / 2 - 180;
                 let boxY = 3;
 
-                // 畫陰影層
+                // 陰影
                 ctx.fillStyle = 'rgba(0,0,0,0.5)';
                 drawRoundedRectPath(ctx, boxX, boxY + 2, 360, boxHeight, 10);
                 ctx.fill();
                 
-                // 畫主體框與金黃邊框
+                // 主框體
                 ctx.fillStyle = '#2c3e50';
                 ctx.strokeStyle = '#f1c40f';
                 ctx.lineWidth = 3;
@@ -1523,20 +1578,23 @@
 
                 ctx.textAlign = 'center';
                 ctx.fillStyle = '#f1c40f';
-                ctx.font = 'bold 16px "Segoe UI"';
+                ctx.font = 'bold 16px "Segoe UI", sans-serif';
                 ctx.fillText("尋找符合以下不等式的 x：", GAME_WIDTH / 2, 22);
                 
                 ctx.fillStyle = '#fff';
-                ctx.font = 'bold 28px "Segoe UI"';
+                ctx.font = 'bold 28px "Segoe UI", sans-serif';
                 ctx.fillText(currentProblem.renderText, GAME_WIDTH / 2, 50);
 
                 if (hintLevel > 0) {
                     ctx.fillStyle = '#00ffff';
-                    ctx.font = 'bold 16px "Segoe UI"';
+                    ctx.font = 'bold 16px "Segoe UI", sans-serif';
                     let hintText = `💡 提示: ${currentProblem.hints[hintLevel - 1]}`;
                     ctx.fillText(hintText, GAME_WIDTH / 2, 74);
                 }
             }
+
+            // 繪製與遊戲畫布 100% 同步縮放的 HUD 按鈕
+            drawCanvasHUDButtons();
         }
 
         function drawHook() {
