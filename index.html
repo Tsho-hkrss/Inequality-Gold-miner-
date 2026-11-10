@@ -257,8 +257,8 @@
         const BASE_ROPE_LENGTH = 50;
 
         // HUD 按鈕點擊熱區 (畫面上精準比例)
-        const hintBtnBounds = { x: 605, y: 50, w: 140, h: 36, r: 18 };
-        const tntBtnBounds  = { x: 755, y: 50, w: 125, h: 36, r: 18 };
+        const hintBtnBounds = { x: 630, y: 48, w: 140, h: 34, r: 17 };
+        const tntBtnBounds  = { x: 780, y: 48, w: 105, h: 34, r: 17 };
 
         // Game State
         let score = 0;
@@ -509,6 +509,7 @@
             }
         }
 
+        // 題目與提示生成邏輯 (已修正：提示絕不透露最終計算答案)
         function generateMathProblem() {
             const rInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
             
@@ -527,7 +528,7 @@
                         check: (x) => isGreater ? x > target : x <= target,
                         validNums: isGreater ? [target + 1, target + 2, target + 3, target + 4] : [target, target - 1, target - 2, target - 3],
                         invalidNums: isGreater ? [target, target - 1, target - 2, target - 3] : [target + 1, target + 2, target + 3, target + 4],
-                        hints: [`x ${op} ${c} - ${b}`, `x ${op} ${target}`]
+                        hints: [`移項：x ${op} ${c} - ${b}`] // 僅提示移項，留給玩家心算 c - b
                     };
                 } else {
                     let c = target - b;
@@ -537,7 +538,7 @@
                         check: (x) => isGreater ? x > target : x <= target,
                         validNums: isGreater ? [target + 1, target + 2, target + 3, target + 4] : [target, target - 1, target - 2, target - 3],
                         invalidNums: isGreater ? [target, target - 1, target - 2, target - 3] : [target + 1, target + 2, target + 3, target + 4],
-                        hints: [`x ${op} ${c} + ${b}`, `x ${op} ${target}`]
+                        hints: [`移項：x ${op} ${c} + ${b}`] // 僅提示移項，留給玩家心算 c + b
                     };
                 }
             } 
@@ -557,7 +558,7 @@
                         check: (x) => isGreater ? x > target : x <= target,
                         validNums: isGreater ? [target + 1, target + 2, target + 3, target + 4] : [target, target - 1, target - 2, target - 3],
                         invalidNums: isGreater ? [target, target - 1, target - 2, target - 3] : [target + 1, target + 2, target + 3, target + 4],
-                        hints: [`${a}x ${op} ${c} - ${b}`, `${a}x ${op} ${c - b}`, `x ${op} ${c - b} ÷ ${a}`]
+                        hints: [`${a}x ${op} ${c} - ${b}`, `x ${op} (${c - b}) ÷ ${a}`]
                     };
                 } else {
                     let c = a * target - b;
@@ -567,7 +568,7 @@
                         check: (x) => isGreater ? x > target : x <= target,
                         validNums: isGreater ? [target + 1, target + 2, target + 3, target + 4] : [target, target - 1, target - 2, target - 3],
                         invalidNums: isGreater ? [target, target - 1, target - 2, target - 3] : [target + 1, target + 2, target + 3, target + 4],
-                        hints: [`${a}x ${op} ${c} + ${b}`, `${a}x ${op} ${c + b}`, `x ${op} ${c + b} ÷ ${a}`]
+                        hints: [`${a}x ${op} ${c} + ${b}`, `x ${op} (${c + b}) ÷ ${a}`]
                     };
                 }
             } 
@@ -582,7 +583,7 @@
                     check: (x) => (-a * x + b) > c,
                     validNums: [target - 1, target - 2, target - 3, target - 4],
                     invalidNums: [target, target + 1, target + 2, target + 3],
-                    hints: [`-${a}x > ${c} - ${b}`, `-${a}x > ${c - b}`, `x < ${c - b} ÷ (-${a})`]
+                    hints: [`-${a}x > ${c} - ${b}`, `除負數要變號：x < (${c - b}) ÷ (-${a})`]
                 };
             } 
             else {
@@ -596,7 +597,7 @@
                     check: (x) => a * (x + b) > c,
                     validNums: [target + 1, target + 2, target + 3, target + 4],
                     invalidNums: [target, target - 1, target - 2, target - 3],
-                    hints: [`x + ${b} > ${c} ÷ ${a}`, `x + ${b} > ${c / a}`, `x > ${c / a} - ${b}`]
+                    hints: [`x + ${b} > ${c} ÷ ${a}`, `x > (${c / a}) - ${b}`]
                 };
             }
         }
@@ -1505,14 +1506,14 @@
             
             ctx.fillStyle = gradHint;
             ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2.5;
+            ctx.lineWidth = 2;
 
             drawRoundedRectPath(ctx, hintBtnBounds.x, hintBtnBounds.y, hintBtnBounds.w, hintBtnBounds.h, hintBtnBounds.r);
             ctx.fill();
             ctx.stroke();
 
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 15px "Segoe UI", sans-serif';
+            ctx.font = 'bold 14px "Segoe UI", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(hintText, hintBtnBounds.x + hintBtnBounds.w / 2, hintBtnBounds.y + hintBtnBounds.h / 2);
@@ -1526,14 +1527,14 @@
             
             ctx.fillStyle = gradTnt;
             ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2.5;
+            ctx.lineWidth = 2;
 
             drawRoundedRectPath(ctx, tntBtnBounds.x, tntBtnBounds.y, tntBtnBounds.w, tntBtnBounds.h, tntBtnBounds.r);
             ctx.fill();
             ctx.stroke();
 
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 15px "Segoe UI", sans-serif';
+            ctx.font = 'bold 14px "Segoe UI", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(`💣 炸藥 (${dynamiteCount})`, tntBtnBounds.x + tntBtnBounds.w / 2, tntBtnBounds.y + tntBtnBounds.h / 2);
@@ -1541,55 +1542,61 @@
         }
 
         function drawUI() {
-            // 頂部頂欄
+            // 頂部頂欄背景
             ctx.fillStyle = '#34495e';
             ctx.fillRect(0, 0, GAME_WIDTH, 45);
             
-            ctx.font = 'bold 20px "Segoe UI", sans-serif';
+            // 左側資金
+            ctx.font = 'bold 19px "Segoe UI", sans-serif';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
             ctx.fillStyle = score >= targetScore ? '#2ecc71' : '#f1c40f';
-            ctx.fillText(`資金: $${score} / $${targetScore}`, 20, 22);
+            ctx.fillText(`資金: $${score} / $${targetScore}`, 15, 22);
+
+            // 右側時間與關卡
+            ctx.font = 'bold 18px "Segoe UI", sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = timeLeft > 10 ? '#2ecc71' : '#e74c3c';
+            ctx.fillText(`時間: ${Math.ceil(timeLeft)}`, 630, 22);
 
             ctx.textAlign = 'right';
             ctx.fillStyle = '#ecf0f1';
-            ctx.fillText(`關卡: ${currentLevel} (Tier ${difficultyTier})`, GAME_WIDTH - 20, 22); 
-            ctx.fillStyle = timeLeft > 10 ? '#2ecc71' : '#e74c3c';
-            ctx.fillText(`時間: ${Math.ceil(timeLeft)}`, GAME_WIDTH - 220, 22);
+            ctx.fillText(`關卡: ${currentLevel} (Tier ${difficultyTier})`, GAME_WIDTH - 15, 22); 
 
             // 中央題目告示牌
             if (currentProblem) {
-                let boxHeight = hintLevel > 0 ? 85 : 80;
-                let boxX = GAME_WIDTH / 2 - 180;
+                let boxWidth = 320;
+                let boxHeight = hintLevel > 0 ? 85 : 78;
+                let boxX = GAME_WIDTH / 2 - boxWidth / 2;
                 let boxY = 3;
 
                 // 陰影
                 ctx.fillStyle = 'rgba(0,0,0,0.5)';
-                drawRoundedRectPath(ctx, boxX, boxY + 2, 360, boxHeight, 10);
+                drawRoundedRectPath(ctx, boxX, boxY + 2, boxWidth, boxHeight, 10);
                 ctx.fill();
                 
                 // 主框體
                 ctx.fillStyle = '#2c3e50';
                 ctx.strokeStyle = '#f1c40f';
                 ctx.lineWidth = 3;
-                drawRoundedRectPath(ctx, boxX, boxY, 360, boxHeight, 10);
+                drawRoundedRectPath(ctx, boxX, boxY, boxWidth, boxHeight, 10);
                 ctx.fill();
                 ctx.stroke();
 
                 ctx.textAlign = 'center';
                 ctx.fillStyle = '#f1c40f';
-                ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                ctx.font = 'bold 15px "Segoe UI", sans-serif';
                 ctx.fillText("尋找符合以下不等式的 x：", GAME_WIDTH / 2, 22);
                 
                 ctx.fillStyle = '#fff';
-                ctx.font = 'bold 28px "Segoe UI", sans-serif';
-                ctx.fillText(currentProblem.renderText, GAME_WIDTH / 2, 50);
+                ctx.font = 'bold 26px "Segoe UI", sans-serif';
+                ctx.fillText(currentProblem.renderText, GAME_WIDTH / 2, 48);
 
                 if (hintLevel > 0) {
                     ctx.fillStyle = '#00ffff';
-                    ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                    ctx.font = 'bold 15px "Segoe UI", sans-serif';
                     let hintText = `💡 提示: ${currentProblem.hints[hintLevel - 1]}`;
-                    ctx.fillText(hintText, GAME_WIDTH / 2, 74);
+                    ctx.fillText(hintText, GAME_WIDTH / 2, 72);
                 }
             }
 
