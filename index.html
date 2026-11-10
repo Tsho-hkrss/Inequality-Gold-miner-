@@ -1,0 +1,1607 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <!-- iPad 橫屏防手勢與滿版視角設定 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>數學黃金礦工：不等式挑戰</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            background-color: #1a1a2e;
+            font-family: 'Microsoft JhengHei', 'Segoe UI', sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        /* iPad 橫屏自適應核心容器 */
+        #game-container {
+            position: relative;
+            width: 96vw;
+            height: 96dvh;
+            max-width: calc(96dvh * (900 / 650));
+            max-height: calc(96vw * (650 / 900));
+            aspect-ratio: 900 / 650;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+            border-radius: 14px;
+            overflow: hidden;
+            background-color: #000;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* 覆蓋層共用樣式 */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.85);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+            z-index: 10;
+        }
+
+        .overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* 寶箱與商店彈窗專用層級 */
+        #chest-overlay, #shop-overlay {
+            z-index: 20;
+        }
+
+        .chest-card {
+            background: #2c3e50;
+            border: 4px solid #f1c40f;
+            border-radius: 16px;
+            padding: 24px 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 480px;
+            width: 85%;
+            max-height: 90%;
+            overflow-y: auto;
+        }
+
+        h1 {
+            font-size: 52px;
+            color: #FFD700;
+            text-shadow: 3px 3px 6px #000, 0 0 20px #B8860B;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            font-size: 24px;
+            color: #ecf0f1;
+            margin-bottom: 40px;
+        }
+
+        button {
+            padding: 12px 35px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #fff;
+            background: linear-gradient(135deg, #f1c40f, #e67e22);
+            border: 3px solid #fff;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.5);
+            transition: transform 0.1s, filter 0.2s;
+            font-family: inherit;
+            touch-action: manipulation;
+        }
+
+        button:hover {
+            filter: brightness(1.1);
+            transform: scale(1.05);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        button:disabled {
+            background: #7f8c8d;
+            border-color: #bdc3c7;
+            cursor: not-allowed;
+            filter: grayscale(1);
+            transform: none;
+        }
+
+        #final-score {
+            font-size: 32px;
+            color: #2ecc71;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px #000;
+            text-align: center;
+        }
+
+        /* 寶箱輸入框樣式 */
+        .chest-input-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 15px;
+            margin-bottom: 10px;
+        }
+
+        .chest-input {
+            width: 140px;
+            font-size: 26px;
+            text-align: center;
+            font-weight: bold;
+            padding: 8px;
+            border-radius: 10px;
+            border: 3px solid #f1c40f;
+            background-color: #ecf0f1;
+            color: #2c3e50;
+            outline: none;
+            -webkit-user-select: auto;
+            user-select: auto;
+        }
+
+        /* 遊戲內 HUD 按鈕組 */
+        #game-hud-buttons {
+            position: absolute;
+            top: 50px;
+            right: 15px;
+            display: flex;
+            gap: 10px;
+            z-index: 5;
+        }
+
+        .hud-btn {
+            padding: 8px 18px;
+            font-size: 15px;
+            border-radius: 20px;
+            border: 2px solid #fff;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- 遊戲內 HUD 功能按鈕 (提示 & 炸藥) -->
+        <div id="game-hud-buttons">
+            <button id="hud-hint-btn" class="hud-btn" onclick="buyHint()" style="background: linear-gradient(135deg, #3498db, #2980b9);">💡 買提示 ($150)</button>
+            <button id="hud-tnt-btn" class="hud-btn" onclick="useDynamite()" style="background: linear-gradient(135deg, #e74c3c, #c0392b);">💣 炸藥 (0)</button>
+        </div>
+
+        <canvas id="gameCanvas" width="900" height="650"></canvas>
+        
+        <!-- 啟動畫面 -->
+        <div id="start-overlay" class="overlay visible">
+            <h1>數學礦工</h1>
+            <div class="subtitle">第一課：一元一次不等式 (Inequalities)</div>
+            <button onclick="startGame()">開始挑戰</button>
+        </div>
+        
+        <!-- 寶箱解鎖彈窗 -->
+        <div id="chest-overlay" class="overlay">
+            <div class="chest-card">
+                <h2 style="color: #f1c40f; margin: 0 0 10px 0; font-size: 32px; text-shadow: 2px 2px 4px #000;">🔒 發現神秘上鎖寶箱！</h2>
+                <div id="chest-timer" style="font-size: 22px; color: #e74c3c; font-weight: bold; margin-bottom: 15px;">剩餘時間：20 秒</div>
+                <div id="chest-question" style="font-size: 26px; color: #fff; margin-bottom: 15px; text-align: center; font-weight: bold;">解方程：3x + 12 = 27</div>
+                <div class="chest-input-group">
+                    <input type="number" id="chest-answer-input" class="chest-input" placeholder="x = ?" autocomplete="off">
+                    <button onclick="submitChestAnswer()">解鎖</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 結算畫面 -->
+        <div id="game-over-overlay" class="overlay">
+            <h1 id="game-over-title">時間到！</h1>
+            <div id="final-score">總資金: $0</div>
+            <button id="game-over-btn" onclick="nextLevel()">繼續下一關</button>
+        </div>
+
+        <!-- 通關商店畫面 -->
+        <div id="shop-overlay" class="overlay">
+            <div class="chest-card">
+                <h2 style="color: #f1c40f; margin: 0 0 10px 0; font-size: 34px; text-shadow: 2px 2px 4px #000;">🛒 礦工道具商店</h2>
+                <div id="shop-money" style="font-size: 22px; color: #2ecc71; font-weight: bold; margin-bottom: 15px;">當前資金: $0</div>
+                
+                <div style="display: flex; flex-direction: column; gap: 10px; width: 100%; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.4); padding: 8px 14px; border-radius: 12px; border: 1px solid #444;">
+                        <div style="color: #fff; text-align: left;">
+                            <div style="font-size: 17px; font-weight: bold; color: #f1c40f;">⚡ 提升拉力 (速度+25%)</div>
+                            <div style="font-size: 12px; color: #bdc3c7;">加快抓取重物回拉的速度</div>
+                        </div>
+                        <button onclick="buyPullUpgrade()" id="btn-buy-pull" style="padding: 6px 14px; font-size: 15px;">$300 購買</button>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.4); padding: 8px 14px; border-radius: 12px; border: 1px solid #444;">
+                        <div style="color: #fff; text-align: left;">
+                            <div style="font-size: 17px; font-weight: bold; color: #1abc9c;">🎯 輔助線 (一次性)</div>
+                            <div style="font-size: 12px; color: #bdc3c7;">下一關顯示爪子擺動的預測軌跡虛線</div>
+                        </div>
+                        <button onclick="buyAimLine()" id="btn-buy-aim" style="padding: 6px 14px; font-size: 15px;">$150 購買</button>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.4); padding: 8px 14px; border-radius: 12px; border: 1px solid #444;">
+                        <div style="color: #fff; text-align: left;">
+                            <div style="font-size: 17px; font-weight: bold; color: #9b59b6;">🔮 透視藥水 (一次性)</div>
+                            <div style="font-size: 12px; color: #bdc3c7;">下一關自動透露所有【？】錢袋內的數字</div>
+                        </div>
+                        <button onclick="buyXrayPotion()" id="btn-buy-xray" style="padding: 6px 14px; font-size: 15px;">$200 購買</button>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.4); padding: 8px 14px; border-radius: 12px; border: 1px solid #444;">
+                        <div style="color: #fff; text-align: left;">
+                            <div style="font-size: 17px; font-weight: bold; color: #e74c3c;">💣 購買炸藥 (TNT)</div>
+                            <div style="font-size: 12px; color: #bdc3c7;">拉回時可炸毀錯抓物品 (持有: <span id="shop-tnt-count" style="color:#f1c40f; font-weight:bold;">0</span>)</div>
+                        </div>
+                        <button onclick="buyShopDynamite()" id="btn-buy-tnt" style="padding: 6px 14px; font-size: 15px;">$200 購買</button>
+                    </div>
+                </div>
+
+                <button onclick="closeShopAndNext()" style="background: linear-gradient(135deg, #2ecc71, #27ae60); width: 100%;">前往下一關 ➔</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const GAME_WIDTH = canvas.width;
+        const GAME_HEIGHT = canvas.height;
+        const UI_HEIGHT = 100;
+        const ORIGIN_X = GAME_WIDTH / 2;
+        const ORIGIN_Y = UI_HEIGHT - 20;
+        const BASE_ROPE_LENGTH = 50;
+
+        // Game State
+        let score = 0;
+        let targetScore = 1000;
+        let timeLeft = 60;
+        let currentLevel = 1;
+        let difficultyTier = 1; 
+        let isGameOver = false;
+        let lastTime = 0;
+        let entities = [];
+        let floatingTexts = [];
+        let particles = []; 
+
+        // Upgrades & Items State
+        let dynamiteCount = 0;
+        let hintLevel = 0; 
+        const HINT_COSTS = [150, 300, 600];
+        let pullMultiplier = 1.0;
+        
+        // 道具狀態
+        let xrayPotionOwned = false;
+        let xrayActive = false;
+        let aimLineOwned = false;
+        let aimLineActive = false;
+        
+        // Math Current Problem
+        let currentProblem = null;
+
+        // Chest Special Modal State
+        let isChestActive = false;
+        let chestTimer = null;
+        let chestTimeLeft = 20;
+        let chestTargetAnswer = 0;
+
+        // Hook State
+        let hook = {
+            angle: Math.PI / 2,
+            length: BASE_ROPE_LENGTH,
+            state: 'swinging',
+            swingDir: 1,
+            swingSpeed: 0.01,
+            shootSpeed: 4, 
+            pullSpeed: 6,
+            x: ORIGIN_X,
+            y: ORIGIN_Y + BASE_ROPE_LENGTH,
+            grabbedEntity: null
+        };
+
+        const audio = {
+            ctx: null,
+            pullOsc: null,
+            pullGain: null,
+            bgmOscs: [],
+            bgmInterval: null,
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+            },
+            playShoot() {
+                if(!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            },
+            playHit() {
+                if(!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(150, this.ctx.currentTime + 0.08);
+                
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
+                
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            },
+            playCollectCorrect() {
+                if(!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, this.ctx.currentTime); 
+                osc.frequency.setValueAtTime(659.25, this.ctx.currentTime + 0.1); 
+                osc.frequency.setValueAtTime(783.99, this.ctx.currentTime + 0.2); 
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.4);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.4);
+            },
+            playCollectWrong() {
+                if(!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const freqs = [140, 110];
+                
+                freqs.forEach((freq, index) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + index * 0.12);
+                    
+                    gain.gain.setValueAtTime(0.18, now + index * 0.12);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + index * 0.12 + 0.1);
+                    
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    
+                    osc.start(now + index * 0.12);
+                    osc.stop(now + index * 0.12 + 0.1);
+                });
+            },
+            playExplosionAndCoins() {
+                if(!this.ctx) return;
+                const now = this.ctx.currentTime;
+                
+                const bufferSize = this.ctx.sampleRate * 0.5;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 800; 
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(1.0, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start(now);
+
+                for(let i = 0; i < 5; i++) {
+                    const osc = this.ctx.createOscillator();
+                    const coinGain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    
+                    const timeOffset = now + 0.05 + (i * 0.1) + (Math.random() * 0.05);
+                    osc.frequency.setValueAtTime(2500 + Math.random() * 500, timeOffset);
+                    osc.frequency.exponentialRampToValueAtTime(1200, timeOffset + 0.1);
+                    
+                    coinGain.gain.setValueAtTime(0, timeOffset);
+                    coinGain.gain.linearRampToValueAtTime(0.3, timeOffset + 0.02);
+                    coinGain.gain.exponentialRampToValueAtTime(0.01, timeOffset + 0.2);
+                    
+                    osc.connect(coinGain);
+                    coinGain.connect(this.ctx.destination);
+                    osc.start(timeOffset);
+                    osc.stop(timeOffset + 0.2);
+                }
+            },
+            startPull(isHeavy = false) {
+                if(!this.ctx || this.pullOsc) return;
+                this.pullOsc = this.ctx.createOscillator();
+                this.pullGain = this.ctx.createGain();
+                this.pullOsc.connect(this.pullGain);
+                this.pullGain.connect(this.ctx.destination);
+                
+                this.pullOsc.type = 'square';
+                this.pullOsc.frequency.setValueAtTime(isHeavy ? 10 : 16, this.ctx.currentTime);
+                
+                this.pullGain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+                this.pullOsc.start();
+            },
+            stopPull() {
+                if(this.pullOsc) {
+                    this.pullGain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.05);
+                    this.pullOsc.stop(this.ctx.currentTime + 0.05);
+                    this.pullOsc = null;
+                }
+            },
+            startBGM() {
+                if(!this.ctx) return;
+                this.stopBGM();
+                const notes = [196, 261.63, 329.63, 261.63]; 
+                let noteIdx = 0;
+                this.bgmInterval = setInterval(() => {
+                    if (isGameOver || isChestActive) return;
+                    let osc = this.ctx.createOscillator();
+                    let gain = this.ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(notes[noteIdx] / 2, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.8);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.8);
+                    noteIdx = (noteIdx + 1) % notes.length;
+                }, 800);
+            },
+            stopBGM() {
+                if(this.bgmInterval) clearInterval(this.bgmInterval);
+            }
+        };
+
+        class Particle {
+            constructor(x, y, color, maxSpeed, size) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * maxSpeed + 2;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed - 2; 
+                this.life = 1.0;
+                this.decay = Math.random() * 0.03 + 0.015;
+                this.size = Math.random() * size + 3;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.3; 
+                this.life -= this.decay;
+            }
+            draw(ctx) {
+                if(this.life <= 0) return;
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function generateMathProblem() {
+            const rInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+            
+            if (difficultyTier === 1) {
+                let isGreater = Math.random() > 0.5;
+                let target = rInt(2, 10);
+                let b = rInt(1, 9);
+                let isPlus = Math.random() > 0.5;
+                let op = isGreater ? '>' : '≤';
+
+                if (isPlus) {
+                    let c = target + b;
+                    return {
+                        text: `x + ${b} ${op} ${c}`,
+                        renderText: `x + ${b} ${op} ${c}`,
+                        check: (x) => isGreater ? x > target : x <= target,
+                        validNums: isGreater ? [target + 1, target + 2, target + 3, target + 4] : [target, target - 1, target - 2, target - 3],
+                        invalidNums: isGreater ? [target, target - 1, target - 2, target - 3] : [target + 1, target + 2, target + 3, target + 4],
+                        hints: [`x ${op} ${c} - ${b}`, `x ${op} ${target}`]
+                    };
+                } else {
+                    let c = target - b;
+                    return {
+                        text: `x - ${b} ${op} ${c}`,
+                        renderText: `x - ${b} ${op} ${c}`,
+                        check: (x) => isGreater ? x > target : x <= target,
+                        validNums: isGreater ? [target + 1, target + 2, target + 3, target + 4] : [target, target - 1, target - 2, target - 3],
+                        invalidNums: isGreater ? [target, target - 1, target - 2, target - 3] : [target + 1, target + 2, target + 3, target + 4],
+                        hints: [`x ${op} ${c} + ${b}`, `x ${op} ${target}`]
+                    };
+                }
+            } 
+            else if (difficultyTier === 2) {
+                let isGreater = Math.random() > 0.5;
+                let a = rInt(2, 4);
+                let target = rInt(1, 8);
+                let b = rInt(1, 8);
+                let isPlus = Math.random() > 0.5;
+                let op = isGreater ? '>' : '≤';
+
+                if (isPlus) {
+                    let c = a * target + b;
+                    return {
+                        text: `${a}x + ${b} ${op} ${c}`,
+                        renderText: `${a}x + ${b} ${op} ${c}`,
+                        check: (x) => isGreater ? x > target : x <= target,
+                        validNums: isGreater ? [target + 1, target + 2, target + 3, target + 4] : [target, target - 1, target - 2, target - 3],
+                        invalidNums: isGreater ? [target, target - 1, target - 2, target - 3] : [target + 1, target + 2, target + 3, target + 4],
+                        hints: [`${a}x ${op} ${c} - ${b}`, `${a}x ${op} ${c - b}`, `x ${op} ${c - b} ÷ ${a}`]
+                    };
+                } else {
+                    let c = a * target - b;
+                    return {
+                        text: `${a}x - ${b} ${op} ${c}`,
+                        renderText: `${a}x - ${b} ${op} ${c}`,
+                        check: (x) => isGreater ? x > target : x <= target,
+                        validNums: isGreater ? [target + 1, target + 2, target + 3, target + 4] : [target, target - 1, target - 2, target - 3],
+                        invalidNums: isGreater ? [target, target - 1, target - 2, target - 3] : [target + 1, target + 2, target + 3, target + 4],
+                        hints: [`${a}x ${op} ${c} + ${b}`, `${a}x ${op} ${c + b}`, `x ${op} ${c + b} ÷ ${a}`]
+                    };
+                }
+            } 
+            else if (difficultyTier === 3) {
+                let a = rInt(2, 4);
+                let target = rInt(1, 6);
+                let b = rInt(1, 8);
+                let c = (-a) * target + b;
+                return {
+                    text: `-${a}x + ${b} > ${c}`,
+                    renderText: `-${a}x + ${b} > ${c}`,
+                    check: (x) => (-a * x + b) > c,
+                    validNums: [target - 1, target - 2, target - 3, target - 4],
+                    invalidNums: [target, target + 1, target + 2, target + 3],
+                    hints: [`-${a}x > ${c} - ${b}`, `-${a}x > ${c - b}`, `x < ${c - b} ÷ (-${a})`]
+                };
+            } 
+            else {
+                let a = rInt(2, 4);
+                let b = rInt(1, 5);
+                let target = rInt(1, 6);
+                let c = a * (target + b);
+                return {
+                    text: `${a}(x + ${b}) > ${c}`,
+                    renderText: `${a}(x + ${b}) > ${c}`,
+                    check: (x) => a * (x + b) > c,
+                    validNums: [target + 1, target + 2, target + 3, target + 4],
+                    invalidNums: [target, target - 1, target - 2, target - 3],
+                    hints: [`x + ${b} > ${c} ÷ ${a}`, `x + ${b} > ${c / a}`, `x > ${c / a} - ${b}`]
+                };
+            }
+        }
+
+        function generateChestEquation() {
+            const rInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+            let a = rInt(2, 6);
+            let x = rInt(2, 12);
+            let b = rInt(2, 20);
+            let c = a * x + b;
+            return {
+                text: `解方程：${a}x + ${b} = ${c}，x = ?`,
+                ans: x
+            };
+        }
+
+        class Entity {
+            constructor(type, x, y, radius, baseValue, baseWeight, num) {
+                this.type = type; 
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.baseValue = baseValue;
+                this.baseWeight = baseWeight;
+                
+                this.number = num;
+                this.isPenalty = false; 
+                this.active = true;
+                
+                this.points = [];
+                if (type === 'gold' || type === 'rock') {
+                    const numPoints = type === 'gold' ? 8 + Math.floor(Math.random()*4) : 7;
+                    for(let i = 0; i < numPoints; i++) {
+                        let angle = (i / numPoints) * Math.PI * 2;
+                        let r = this.radius * (0.8 + Math.random() * 0.4);
+                        this.points.push({ dx: r * Math.cos(angle), dy: r * Math.sin(angle) });
+                    }
+                }
+            }
+
+            getWeight() {
+                return this.isPenalty ? 12 : this.baseWeight; 
+            }
+
+            draw(ctx) {
+                if (!this.active) return;
+                
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                if (this.type === 'gold') {
+                    const grad = ctx.createRadialGradient(-this.radius*0.2, -this.radius*0.2, this.radius*0.1, 0, 0, this.radius);
+                    grad.addColorStop(0, '#FFFF99');
+                    grad.addColorStop(0.4, '#FFD700');
+                    grad.addColorStop(1, '#B8860B');
+
+                    if(this.isPenalty) ctx.filter = 'grayscale(80%) brightness(50%)';
+
+                    ctx.fillStyle = grad;
+                    ctx.strokeStyle = '#8B6508';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(this.points[0].dx, this.points[0].dy);
+                    for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i].dx, this.points[i].dy);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                } else if (this.type === 'rock') {
+                    ctx.fillStyle = '#5A636A';
+                    ctx.strokeStyle = '#2F363D';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(this.points[0].dx, this.points[0].dy);
+                    for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i].dx, this.points[i].dy);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                } else if (this.type === 'emerald') {
+                    ctx.shadowColor = '#00ff88';
+                    ctx.shadowBlur = 15;
+
+                    let w = this.radius * 0.75;
+                    let h = this.radius * 1.1;
+                    let c = this.radius * 0.25;
+
+                    const drawOctagon = (scale) => {
+                        let sw = w * scale;
+                        let sh = h * scale;
+                        let sc = c * scale;
+                        ctx.beginPath();
+                        ctx.moveTo(-sw + sc, -sh);
+                        ctx.lineTo(sw - sc, -sh);
+                        ctx.lineTo(sw, -sh + sc);
+                        ctx.lineTo(sw, sh - sc);
+                        ctx.lineTo(sw - sc, sh);
+                        ctx.lineTo(-sw + sc, sh);
+                        ctx.lineTo(-sw, sh - sc);
+                        ctx.lineTo(-sw, -sh + sc);
+                        ctx.closePath();
+                    };
+
+                    drawOctagon(1.0);
+                    const grad1 = ctx.createLinearGradient(-w, -h, w, h);
+                    grad1.addColorStop(0, '#008b45');
+                    grad1.addColorStop(0.5, '#00592d');
+                    grad1.addColorStop(1, '#002613');
+                    ctx.fillStyle = grad1;
+                    ctx.fill();
+                    ctx.strokeStyle = '#001a0d';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    ctx.shadowBlur = 0; 
+
+                    drawOctagon(0.85);
+                    ctx.fillStyle = '#00a652';
+                    ctx.fill();
+                    ctx.stroke();
+
+                    drawOctagon(0.65);
+                    ctx.fillStyle = '#00cc66';
+                    ctx.fill();
+                    ctx.stroke();
+
+                    drawOctagon(0.45);
+                    ctx.fillStyle = '#33ff99';
+                    ctx.fill();
+                    ctx.stroke();
+
+                    drawOctagon(0.3);
+                    ctx.fillStyle = '#00fa8c';
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    const corners = [
+                        [-w + c, -h], [w - c, -h], [w, -h + c], [w, h - c],
+                        [w - c, h], [-w + c, h], [-w, h - c], [-w, -h + c]
+                    ];
+                    for (let pt of corners) {
+                        ctx.moveTo(pt[0], pt[1]);
+                        ctx.lineTo(pt[0] * 0.3, pt[1] * 0.3);
+                    }
+                    ctx.strokeStyle = 'rgba(0, 51, 26, 0.4)';
+                    ctx.stroke();
+
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+                    ctx.beginPath();
+                    ctx.moveTo(-w + c, -h);
+                    ctx.lineTo(-w * 0.3 + c * 0.3, -h * 0.3);
+                    ctx.lineTo(-w * 0.3, -h * 0.3 + c * 0.3);
+                    ctx.lineTo(-w, -h + c);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(-w + c, -h);
+                    ctx.lineTo(w - c, -h);
+                    ctx.lineTo(w * 0.3 - c * 0.3, -h * 0.3);
+                    ctx.lineTo(-w * 0.3 + c * 0.3, -h * 0.3);
+                    ctx.closePath();
+                    ctx.fill();
+
+                } else if (this.type === 'bag') {
+                    ctx.fillStyle = '#E3C79B';
+                    ctx.strokeStyle = '#8C6C42';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, this.radius * 0.2, this.radius * 0.8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(-this.radius * 0.3, -this.radius * 0.5);
+                    ctx.lineTo(-this.radius * 0.5, -this.radius);
+                    ctx.lineTo(this.radius * 0.5, -this.radius);
+                    ctx.lineTo(this.radius * 0.3, -this.radius * 0.5);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                } else if (this.type === 'chest') {
+                    let w = this.radius * 1.8;
+                    let h = this.radius * 1.3;
+                    
+                    ctx.fillStyle = '#8B4513';
+                    ctx.strokeStyle = '#3d1e08';
+                    ctx.lineWidth = 3;
+                    ctx.fillRect(-w/2, -h/2, w, h);
+                    ctx.strokeRect(-w/2, -h/2, w, h);
+                    
+                    ctx.fillStyle = '#D4AF37';
+                    ctx.fillRect(-w/2, -h/2, 6, h);
+                    ctx.fillRect(w/2 - 6, -h/2, 6, h);
+                    ctx.fillRect(-w/2, -2, w, 4);
+
+                    ctx.fillStyle = '#FFD700';
+                    ctx.beginPath();
+                    ctx.arc(0, 2, 7, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#000';
+                    ctx.beginPath();
+                    ctx.arc(0, 2, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.filter = 'none'; 
+                if (this.type === 'bag' && !this.isGrabbed && !xrayActive) {
+                    ctx.fillStyle = '#D92525';
+                    ctx.font = `bold ${this.radius * 0.8}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('?', 0, this.radius * 0.2);
+                } else if (this.type !== 'chest') {
+                    ctx.fillStyle = (this.type === 'bag' && xrayActive) ? '#00ffff' : '#FFFFFF';
+                    ctx.strokeStyle = '#000000';
+                    ctx.lineWidth = 4;
+                    ctx.font = `bold ${this.radius * 0.8}px "Segoe UI", sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    let displayY = this.type === 'bag' ? this.radius * 0.2 : 0;
+                    ctx.strokeText(this.number, 0, displayY);
+                    ctx.fillText(this.number, 0, displayY);
+                    
+                    if (this.isPenalty) {
+                        ctx.strokeStyle = '#FF0000';
+                        ctx.lineWidth = 6;
+                        ctx.beginPath();
+                        ctx.moveTo(-this.radius * 0.6, -this.radius * 0.6 + displayY);
+                        ctx.lineTo(this.radius * 0.6, this.radius * 0.6 + displayY);
+                        ctx.stroke();
+                    }
+                }
+                ctx.restore();
+            }
+        }
+
+        class FloatingText {
+            constructor(text, x, y, color) {
+                this.text = text;
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.alpha = 1;
+                this.vy = -1.5;
+            }
+            update() {
+                this.y += this.vy;
+                this.alpha -= 0.02;
+            }
+            draw(ctx) {
+                if(this.alpha <= 0) return;
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.fillStyle = this.color;
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 3;
+                ctx.font = 'bold 30px "Segoe UI"';
+                ctx.textAlign = 'center';
+                ctx.strokeText(this.text, this.x, this.y);
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+
+        function initLevel() {
+            entities = [];
+            currentProblem = generateMathProblem();
+            
+            let nums = [];
+            for(let i=0; i<4; i++) nums.push(currentProblem.validNums[Math.floor(Math.random() * currentProblem.validNums.length)]);
+            for(let i=0; i<6; i++) nums.push(currentProblem.invalidNums[Math.floor(Math.random() * currentProblem.invalidNums.length)]);
+            
+            nums.sort(() => Math.random() - 0.5);
+
+            const layouts = [
+                [200, 250, 40, 'gold', 500, 3],
+                [550, 320, 50, 'gold', 800, 4],
+                [750, 280, 30, 'gold', 250, 1.5],
+                [300, 480, 45, 'gold', 600, 3.5],
+                [100, 550, 35, 'gold', 300, 2],
+                [450, 520, 60, 'rock', 50, 5],
+                [350, 260, 35, 'rock', 30, 4],
+                [800, 450, 40, 'rock', 40, 4.5],
+                [650, 220, 25, 'bag', 400, 1.5],
+                [150, 400, 25, 'bag', 400, 1.5],
+                [480, 360, 32, 'chest', 1000, 3.5]
+            ];
+
+            for (let i = 0; i < layouts.length; i++) {
+                let l = layouts[i];
+                let num = l[3] === 'chest' ? 0 : nums[i % nums.length];
+                entities.push(new Entity(l[3], l[0], l[1], l[2], l[4], l[5], num));
+            }
+        }
+
+        function updateHUD() {
+            const tntBtn = document.getElementById('hud-tnt-btn');
+            const hintBtn = document.getElementById('hud-hint-btn');
+            
+            if (tntBtn) tntBtn.innerText = `💣 炸藥 (${dynamiteCount})`;
+            if (hintBtn) {
+                let maxHints = currentProblem ? currentProblem.hints.length : 3;
+                if (hintLevel < maxHints) {
+                    let cost = HINT_COSTS[hintLevel];
+                    hintBtn.innerText = `💡 買提示 ($${cost})`;
+                    hintBtn.style.opacity = '1';
+                    hintBtn.disabled = false;
+                } else {
+                    hintBtn.innerText = `💡 提示已達上限`;
+                    hintBtn.style.opacity = '0.6';
+                    hintBtn.disabled = true;
+                }
+            }
+        }
+
+        function buyHint() {
+            if (isGameOver || isChestActive) return;
+            let maxHints = currentProblem ? currentProblem.hints.length : 3;
+            if (hintLevel >= maxHints) {
+                floatingTexts.push(new FloatingText("提示已達上限！", ORIGIN_X, ORIGIN_Y - 20, "#FFFF00"));
+                return;
+            }
+            let cost = HINT_COSTS[hintLevel];
+            if (score >= cost) {
+                score -= cost;
+                hintLevel++;
+                audio.playCollectCorrect();
+                floatingTexts.push(new FloatingText(`解鎖第 ${hintLevel} 步提示！`, ORIGIN_X, ORIGIN_Y - 20, "#FFFF00"));
+                updateHUD();
+            } else {
+                audio.playCollectWrong();
+                floatingTexts.push(new FloatingText(`資金不足 $${cost}！`, ORIGIN_X, ORIGIN_Y - 20, "#FF3333"));
+            }
+        }
+
+        function useDynamite() {
+            if (isGameOver || isChestActive) return;
+            if (hook.state === 'pulling' && hook.grabbedEntity) {
+                if (dynamiteCount > 0) {
+                    dynamiteCount--;
+                    const ent = hook.grabbedEntity;
+                    
+                    audio.playExplosionAndCoins();
+                    const colors = ['#ff0000', '#ff7700', '#ffff00', '#555555'];
+                    for(let i = 0; i < 30; i++) {
+                        particles.push(new Particle(ent.x, ent.y, colors[Math.floor(Math.random()*colors.length)], 10, 5));
+                    }
+
+                    floatingTexts.push(new FloatingText("炸毀！", ent.x, ent.y, "#FF3333"));
+                    ent.active = false;
+                    hook.grabbedEntity = null;
+                    hook.state = 'pulling'; 
+                    audio.stopPull();
+                    updateHUD();
+                } else {
+                    audio.playCollectWrong();
+                    floatingTexts.push(new FloatingText("無炸藥！", ORIGIN_X, ORIGIN_Y - 20, "#FF3333"));
+                }
+            }
+        }
+
+        function startGame() {
+            document.getElementById('start-overlay').classList.remove('visible');
+            audio.init();
+            score = 0;
+            currentLevel = 1;
+            difficultyTier = 1; 
+            dynamiteCount = 0;
+            pullMultiplier = 1.0;
+            xrayPotionOwned = false;
+            xrayActive = false;
+            aimLineOwned = false;
+            aimLineActive = false;
+            startNewRound();
+        }
+
+        function nextLevel() {
+            document.getElementById('game-over-overlay').classList.remove('visible');
+            currentLevel++;
+            startNewRound();
+        }
+
+        function restartGame() {
+            document.getElementById('game-over-overlay').classList.remove('visible');
+            score = 0;
+            currentLevel = 1;
+            difficultyTier = 1; 
+            dynamiteCount = 0;
+            pullMultiplier = 1.0;
+            xrayPotionOwned = false;
+            xrayActive = false;
+            aimLineOwned = false;
+            aimLineActive = false;
+            startNewRound();
+        }
+
+        function retrySameRound() {
+            document.getElementById('game-over-overlay').classList.remove('visible');
+            startNewRound();
+        }
+
+        function startNewRound() {
+            targetScore = Math.max(score + 300, 1000 + (currentLevel - 1) * 800); 
+            timeLeft = 60; 
+            isGameOver = false;
+            isChestActive = false;
+            hintLevel = 0; 
+            
+            if (xrayPotionOwned) {
+                xrayActive = true;
+                xrayPotionOwned = false;
+            } else {
+                xrayActive = false;
+            }
+
+            if (aimLineOwned) {
+                aimLineActive = true;
+                aimLineOwned = false;
+            } else {
+                aimLineActive = false;
+            }
+
+            hook.state = 'swinging';
+            hook.length = BASE_ROPE_LENGTH;
+            hook.grabbedEntity = null;
+            floatingTexts = [];
+            particles = []; 
+            
+            updateHUD();
+            initLevel();
+            audio.startBGM();
+
+            if (xrayActive) {
+                floatingTexts.push(new FloatingText("🔮 透視藥水生效中！", ORIGIN_X, ORIGIN_Y + 40, "#00FFFF"));
+            }
+            if (aimLineActive) {
+                floatingTexts.push(new FloatingText("🎯 輔助線生效中！", ORIGIN_X, ORIGIN_Y + 75, "#1ABC9C"));
+            }
+
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function shootHook() {
+            if (hook.state === 'swinging' && !isGameOver && !isChestActive) {
+                hook.state = 'shooting';
+                audio.playShoot();
+            }
+        }
+
+        function handleTouchShoot(e) {
+            if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
+                if (e.cancelable) e.preventDefault();
+                shootHook();
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (isChestActive) {
+                if (e.key === 'Enter') submitChestAnswer();
+                return;
+            }
+            if (e.code === 'Space') shootHook();
+            if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyD') useDynamite();
+        });
+
+        canvas.addEventListener('mousedown', shootHook);
+        canvas.addEventListener('touchstart', handleTouchShoot, { passive: false });
+
+        function openChestModal() {
+            isChestActive = true;
+            const problem = generateChestEquation();
+            chestTargetAnswer = problem.ans;
+            chestTimeLeft = 20;
+
+            document.getElementById('chest-question').innerText = problem.text;
+            document.getElementById('chest-timer').innerText = `剩餘時間：${chestTimeLeft} 秒`;
+            const inputEl = document.getElementById('chest-answer-input');
+            inputEl.value = '';
+            document.getElementById('chest-overlay').classList.add('visible');
+            setTimeout(() => inputEl.focus(), 100);
+
+            if (chestTimer) clearInterval(chestTimer);
+            chestTimer = setInterval(() => {
+                chestTimeLeft--;
+                document.getElementById('chest-timer').innerText = `剩餘時間：${chestTimeLeft} 秒`;
+                if (chestTimeLeft <= 0) {
+                    resolveChest(false, "超時爆炸！");
+                }
+            }, 1000);
+        }
+
+        function submitChestAnswer() {
+            if (!isChestActive) return;
+            const inputVal = document.getElementById('chest-answer-input').value.trim();
+            if (inputVal === '') return;
+
+            const userAns = parseInt(inputVal, 10);
+            if (userAns === chestTargetAnswer) {
+                resolveChest(true, "解鎖成功！");
+            } else {
+                resolveChest(false, "密碼錯誤，寶箱爆炸！");
+            }
+        }
+
+        function resolveChest(isSuccess, message) {
+            clearInterval(chestTimer);
+            chestTimer = null;
+            isChestActive = false;
+            document.getElementById('chest-overlay').classList.remove('visible');
+
+            if (isSuccess) {
+                score += 1000;
+                audio.playCollectCorrect();
+                floatingTexts.push(new FloatingText(`+$1000 ${message}`, ORIGIN_X, ORIGIN_Y - 20, "#00FF00"));
+            } else {
+                score = Math.max(0, score - 300);
+                audio.playExplosionAndCoins();
+                
+                const colors = ['#ff0000', '#ff7700', '#ffff00', '#555555'];
+                for(let i = 0; i < 40; i++) {
+                    particles.push(new Particle(ORIGIN_X, ORIGIN_Y + 30, colors[Math.floor(Math.random()*colors.length)], 12, 6));
+                }
+                for(let i = 0; i < 20; i++) {
+                    particles.push(new Particle(ORIGIN_X, ORIGIN_Y + 30, '#FFD700', 10, 4));
+                }
+
+                floatingTexts.push(new FloatingText(`-$300 ${message}`, ORIGIN_X, ORIGIN_Y - 40, "#FF3333"));
+            }
+
+            let remainingValid = entities.filter(e => e.active && currentProblem.check(e.number));
+            if (remainingValid.length === 0) {
+                endLevel();
+            }
+        }
+
+        function updateGame(deltaTime) {
+            if (isGameOver || isChestActive) return;
+
+            timeLeft -= deltaTime / 1000;
+            if (timeLeft <= 0) {
+                timeLeft = 0;
+                endLevel();
+                return;
+            }
+
+            floatingTexts.forEach(ft => ft.update());
+            floatingTexts = floatingTexts.filter(ft => ft.alpha > 0);
+            
+            particles.forEach(p => p.update());
+            particles = particles.filter(p => p.life > 0);
+
+            if (hook.state === 'swinging') {
+                hook.angle += hook.swingSpeed * hook.swingDir;
+                const minAngle = 0.2, maxAngle = Math.PI - 0.2;
+                if (hook.angle > maxAngle) { hook.angle = maxAngle; hook.swingDir = -1; }
+                else if (hook.angle < minAngle) { hook.angle = minAngle; hook.swingDir = 1; }
+
+                hook.x = ORIGIN_X + Math.cos(hook.angle) * hook.length;
+                hook.y = ORIGIN_Y + Math.sin(hook.angle) * hook.length;
+
+            } else if (hook.state === 'shooting') {
+                hook.length += hook.shootSpeed;
+                hook.x = ORIGIN_X + Math.cos(hook.angle) * hook.length;
+                hook.y = ORIGIN_Y + Math.sin(hook.angle) * hook.length;
+
+                if (hook.x < 0 || hook.x > GAME_WIDTH || hook.y > GAME_HEIGHT) {
+                    hook.state = 'pulling';
+                    audio.startPull();
+                }
+
+                for (let ent of entities) {
+                    if (!ent.active) continue;
+                    let dist = Math.hypot(hook.x - ent.x, hook.y - ent.y);
+                    if (dist < ent.radius + 15) {
+                        hook.state = 'pulling';
+                        hook.grabbedEntity = ent;
+                        ent.isGrabbed = true;
+                        
+                        if (ent.type === 'chest') {
+                            floatingTexts.push(new FloatingText("抓到寶箱！", ent.x, ent.y - ent.radius, "#FFD700"));
+                        } else {
+                            let isCorrect = currentProblem.check(ent.number);
+                            if (!isCorrect) {
+                                ent.isPenalty = true; 
+                                if (ent.type === 'gold') {
+                                    ent.type = 'rock'; 
+                                    ent.points = [];
+                                    for(let i = 0; i < 7; i++) {
+                                        let angle = (i / 7) * Math.PI * 2;
+                                        let r = ent.radius * (0.8 + Math.random() * 0.4);
+                                        ent.points.push({ dx: r * Math.cos(angle), dy: r * Math.sin(angle) });
+                                    }
+                                }
+                                floatingTexts.push(new FloatingText("算錯了！變重！", ent.x, ent.y - ent.radius, "#FF4444"));
+                            } else {
+                                if (ent.type === 'rock') {
+                                    ent.type = 'emerald';
+                                    ent.baseValue = 800; 
+                                    ent.baseWeight = 4;  
+                                    ent.radius = 25; 
+                                    ent.points = [];
+                                }
+                                floatingTexts.push(new FloatingText("正確！", ent.x, ent.y - ent.radius, "#44FF44"));
+                            }
+                        }
+
+                        audio.playHit();
+                        audio.startPull(ent.isPenalty);
+                        break;
+                    }
+                }
+            } else if (hook.state === 'pulling') {
+                let currentPullSpeed = hook.pullSpeed * pullMultiplier;
+                if (hook.grabbedEntity) {
+                    currentPullSpeed = Math.max(0.5, currentPullSpeed / hook.grabbedEntity.getWeight());
+                }
+
+                hook.length -= currentPullSpeed;
+                
+                if (hook.length <= BASE_ROPE_LENGTH) {
+                    hook.length = BASE_ROPE_LENGTH;
+                    hook.state = 'swinging';
+                    audio.stopPull();
+                    
+                    if (hook.grabbedEntity) {
+                        let ent = hook.grabbedEntity;
+
+                        if (ent.type === 'chest') {
+                            ent.active = false;
+                            hook.grabbedEntity = null;
+                            openChestModal();
+                            return;
+                        }
+
+                        if (!ent.isPenalty) {
+                            score += ent.baseValue;
+                            audio.playCollectCorrect();
+                            floatingTexts.push(new FloatingText(`+$${ent.baseValue}`, ORIGIN_X, ORIGIN_Y - 20, "#00FF00"));
+                        } else {
+                            audio.playCollectWrong();
+                            floatingTexts.push(new FloatingText(`$0`, ORIGIN_X, ORIGIN_Y - 20, "#FF0000"));
+                        }
+                        ent.active = false;
+                        hook.grabbedEntity = null;
+
+                        let remainingValid = entities.filter(e => e.active && currentProblem.check(e.number));
+                        if (remainingValid.length === 0) {
+                            endLevel();
+                        }
+                    }
+                }
+
+                hook.x = ORIGIN_X + Math.cos(hook.angle) * hook.length;
+                hook.y = ORIGIN_Y + Math.sin(hook.angle) * hook.length;
+
+                if (hook.grabbedEntity) {
+                    hook.grabbedEntity.x = hook.x + Math.cos(hook.angle) * (hook.grabbedEntity.radius * 0.6);
+                    hook.grabbedEntity.y = hook.y + Math.sin(hook.angle) * (hook.grabbedEntity.radius * 0.6);
+                }
+            }
+        }
+
+        function endLevel() {
+            isGameOver = true;
+            audio.stopBGM();
+            
+            const passed = score >= targetScore;
+            const titleEl = document.getElementById('game-over-title');
+            const scoreEl = document.getElementById('final-score');
+            const btnEl = document.getElementById('game-over-btn');
+
+            if (passed) {
+                if (difficultyTier < 4) difficultyTier++; 
+                titleEl.innerText = `關卡完成！(升級 ⬆️ Tier ${difficultyTier})`;
+                titleEl.style.color = "#2ecc71";
+                scoreEl.innerHTML = `總資金: $${score}<br><span style="font-size:22px; color:#f1c40f;">目標分: $${targetScore} (已達標)</span>`;
+                btnEl.innerText = "進入商店 🛒";
+                btnEl.onclick = openShop;
+            } else {
+                if (difficultyTier > 1) difficultyTier--; 
+                titleEl.innerText = `未達目標！(調整 ⬇️ Tier ${difficultyTier})`;
+                titleEl.style.color = "#e74c3c";
+                scoreEl.innerHTML = `總資金: $${score}<br><span style="font-size:22px; color:#e74c3c;">已為您調整挑戰難度</span>`;
+                btnEl.innerText = "降級重新挑戰 🔄";
+                btnEl.onclick = retrySameRound;
+            }
+
+            document.getElementById('game-over-overlay').classList.add('visible');
+        }
+
+        function updateShopUI() {
+            document.getElementById('shop-money').innerText = `當前資金: $${score}`;
+            document.getElementById('shop-tnt-count').innerText = dynamiteCount;
+            
+            document.getElementById('btn-buy-pull').disabled = score < 300;
+            
+            const btnAim = document.getElementById('btn-buy-aim');
+            if (aimLineOwned) {
+                btnAim.innerText = "已持有 (下一關自動使用)";
+                btnAim.disabled = true;
+            } else {
+                btnAim.innerText = "$150 購買";
+                btnAim.disabled = score < 150;
+            }
+
+            const btnXray = document.getElementById('btn-buy-xray');
+            if (xrayPotionOwned) {
+                btnXray.innerText = "已持有 (下一關自動使用)";
+                btnXray.disabled = true;
+            } else {
+                btnXray.innerText = "$200 購買";
+                btnXray.disabled = score < 200;
+            }
+
+            document.getElementById('btn-buy-tnt').disabled = score < 200;
+        }
+
+        function openShop() {
+            document.getElementById('game-over-overlay').classList.remove('visible');
+            updateShopUI();
+            document.getElementById('shop-overlay').classList.add('visible');
+        }
+
+        function buyPullUpgrade() {
+            if (score >= 300) {
+                score -= 300;
+                pullMultiplier += 0.25;
+                audio.playCollectCorrect();
+                updateShopUI();
+            }
+        }
+
+        function buyAimLine() {
+            if (score >= 150 && !aimLineOwned) {
+                score -= 150;
+                aimLineOwned = true;
+                audio.playCollectCorrect();
+                updateShopUI();
+            }
+        }
+
+        function buyXrayPotion() {
+            if (score >= 200 && !xrayPotionOwned) {
+                score -= 200;
+                xrayPotionOwned = true;
+                audio.playCollectCorrect();
+                updateShopUI();
+            }
+        }
+
+        function buyShopDynamite() {
+            if (score >= 200) {
+                score -= 200;
+                dynamiteCount++;
+                audio.playCollectCorrect();
+                updateShopUI();
+            }
+        }
+
+        function closeShopAndNext() {
+            document.getElementById('shop-overlay').classList.remove('visible');
+            currentLevel++;
+            startNewRound();
+        }
+
+        function drawBackground() {
+            ctx.fillStyle = '#4a90e2';
+            ctx.fillRect(0, 0, GAME_WIDTH, UI_HEIGHT);
+
+            ctx.fillStyle = '#D4AF67';
+            ctx.beginPath();
+            ctx.moveTo(0, UI_HEIGHT);
+            ctx.lineTo(GAME_WIDTH, UI_HEIGHT);
+            ctx.lineTo(GAME_WIDTH, 250);
+            ctx.bezierCurveTo(600, 300, 300, 200, 0, 280);
+            ctx.fill();
+
+            ctx.fillStyle = '#B38F46';
+            ctx.beginPath();
+            ctx.moveTo(0, 280);
+            ctx.bezierCurveTo(300, 200, 600, 300, GAME_WIDTH, 250);
+            ctx.lineTo(GAME_WIDTH, 480);
+            ctx.bezierCurveTo(650, 420, 250, 550, 0, 480);
+            ctx.fill();
+
+            ctx.fillStyle = '#8B6508';
+            ctx.beginPath();
+            ctx.moveTo(0, 480);
+            ctx.bezierCurveTo(250, 550, 650, 420, GAME_WIDTH, 480);
+            ctx.lineTo(GAME_WIDTH, GAME_HEIGHT);
+            ctx.lineTo(0, GAME_HEIGHT);
+            ctx.fill();
+        }
+
+        function drawMiner() {
+            ctx.fillStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.arc(ORIGIN_X, UI_HEIGHT, 80, Math.PI, 0);
+            ctx.fill();
+
+            ctx.save();
+            ctx.translate(ORIGIN_X, UI_HEIGHT);
+            
+            ctx.fillStyle = '#A0522D';
+            ctx.beginPath();
+            ctx.arc(15, -25, 20, Math.PI, 0);
+            ctx.fillRect(-5, -25, 40, 25);
+            ctx.fill();
+
+            ctx.fillStyle = '#FFE0B2';
+            ctx.beginPath();
+            ctx.arc(15, -45, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#ecf0f1';
+            ctx.beginPath();
+            ctx.arc(15, -40, 14, 0, Math.PI);
+            ctx.fill();
+            
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(8, -48, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#8B4513';
+            ctx.beginPath();
+            ctx.ellipse(15, -55, 18, 6, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(15, -57, 10, Math.PI, 0);
+            ctx.fill();
+
+            ctx.fillStyle = '#654321';
+            ctx.fillRect(-25, -20, 10, 20);
+            ctx.fillRect(5, -20, 10, 20);
+            ctx.fillStyle = '#333'; 
+            ctx.fillRect(-20, -35, 30, 25);
+            
+            ctx.strokeStyle = '#A0522D';
+            ctx.lineWidth = 8;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(15, -20);
+            ctx.lineTo(-5, -15);
+            ctx.lineTo(-5, -25);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        /* 輔助畫圓角矩形函數，避免路徑錯位 */
+        function drawRoundedRectPath(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.arcTo(x + w, y, x + w, y + r, r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+            ctx.lineTo(x + r, y + h);
+            ctx.arcTo(x, y + h, x, y + h - r, r);
+            ctx.lineTo(x, y + r);
+            ctx.arcTo(x, y, x + r, y, r);
+            ctx.closePath();
+        }
+
+        function drawUI() {
+            ctx.fillStyle = '#34495e';
+            ctx.fillRect(0, 0, GAME_WIDTH, 45);
+            
+            ctx.font = 'bold 20px "Segoe UI"';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = score >= targetScore ? '#2ecc71' : '#f1c40f';
+            ctx.fillText(`資金: $${score} / $${targetScore}`, 20, 22);
+
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#ecf0f1';
+            ctx.fillText(`關卡: ${currentLevel} (Tier ${difficultyTier})`, GAME_WIDTH - 20, 22); 
+            ctx.fillStyle = timeLeft > 10 ? '#2ecc71' : '#e74c3c';
+            ctx.fillText(`時間: ${Math.ceil(timeLeft)}`, GAME_WIDTH - 180, 22);
+
+            if (currentProblem) {
+                let boxHeight = hintLevel > 0 ? 85 : 80;
+                let boxX = GAME_WIDTH / 2 - 180;
+                let boxY = 3;
+
+                // 畫陰影層
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                drawRoundedRectPath(ctx, boxX, boxY + 2, 360, boxHeight, 10);
+                ctx.fill();
+                
+                // 畫主體框與金黃邊框
+                ctx.fillStyle = '#2c3e50';
+                ctx.strokeStyle = '#f1c40f';
+                ctx.lineWidth = 3;
+                drawRoundedRectPath(ctx, boxX, boxY, 360, boxHeight, 10);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#f1c40f';
+                ctx.font = 'bold 16px "Segoe UI"';
+                ctx.fillText("尋找符合以下不等式的 x：", GAME_WIDTH / 2, 22);
+                
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 28px "Segoe UI"';
+                ctx.fillText(currentProblem.renderText, GAME_WIDTH / 2, 50);
+
+                if (hintLevel > 0) {
+                    ctx.fillStyle = '#00ffff';
+                    ctx.font = 'bold 16px "Segoe UI"';
+                    let hintText = `💡 提示: ${currentProblem.hints[hintLevel - 1]}`;
+                    ctx.fillText(hintText, GAME_WIDTH / 2, 74);
+                }
+            }
+        }
+
+        function drawHook() {
+            if (aimLineActive && hook.state === 'swinging') {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([8, 6]);
+                ctx.beginPath();
+                ctx.moveTo(ORIGIN_X, ORIGIN_Y);
+                let lineLen = 850;
+                ctx.lineTo(ORIGIN_X + Math.cos(hook.angle) * lineLen, ORIGIN_Y + Math.sin(hook.angle) * lineLen);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            ctx.strokeStyle = '#ecf0f1';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(ORIGIN_X, ORIGIN_Y);
+            ctx.lineTo(hook.x, hook.y);
+            ctx.stroke();
+
+            ctx.save();
+            ctx.translate(hook.x, hook.y);
+            ctx.rotate(hook.angle - Math.PI / 2);
+
+            ctx.fillStyle = '#7f8c8d';
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 2;
+            
+            ctx.beginPath(); ctx.rect(-6, -6, 12, 12); ctx.fill(); ctx.stroke(); 
+            
+            ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(-15, 15); ctx.lineTo(-10, 18); ctx.lineTo(-2, 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(15, 15); ctx.lineTo(10, 18); ctx.lineTo(2, 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function gameLoop(timestamp) {
+            let deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+            if (deltaTime > 100) deltaTime = 100; 
+
+            updateGame(deltaTime);
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            drawBackground();
+            drawMiner();
+            
+            for (let ent of entities) if (ent !== hook.grabbedEntity) ent.draw(ctx);
+            
+            drawHook();
+            
+            if (hook.grabbedEntity) hook.grabbedEntity.draw(ctx);
+            
+            for (let ft of floatingTexts) ft.draw(ctx);
+            
+            for (let p of particles) p.draw(ctx);
+
+            drawUI();
+
+            if (!isGameOver) requestAnimationFrame(gameLoop);
+        }
+
+    </script>
+</body>
+</html>
